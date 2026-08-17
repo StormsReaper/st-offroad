@@ -20,8 +20,13 @@ Config.WaypointCommand = 'addtrailpoint'
 Config.Trailhead = {
     pedModel = 's_m_y_prismuscl_01',
     pedHeadingOffset = 180.0,
+
+    -- Ground placement. The ground probe finds the actual terrain/collision
+    -- height, then pedGroundOffset raises the ped so its feet/body are not
+    -- buried by models whose entity origin sits below the visible feet.
     groundSearchHeight = 100.0,
     groundSearchStep = 5.0,
+    pedGroundOffset = 0.85,
 
     crowdModels = {
         'a_f_y_beach_01',
