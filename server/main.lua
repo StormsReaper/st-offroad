@@ -17,8 +17,6 @@ end
 local function checkpointCount(trail)
     local route = trail.route or {}
     local count = #route
-    -- Older trail records included the finish position as the final route point.
-    -- Do not require that duplicate point twice.
     if count > 0 then
         local last = route[count]
         if last and #(vector3(last.x + 0.0, last.y + 0.0, last.z + 0.0) - trail.finish) <= 2.0 then
@@ -68,9 +66,12 @@ end)
 QBCore.Functions.CreateCallback('offroad:server:getLeaderboard', function(source, cb, trailId)
     local rows = MySQL.query.await([[
         SELECT player_name, citizenid, time_ms,
+               vehicle_name, vehicle_model, vehicle_plate,
                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i') AS completed_at
-        FROM offroad_trail_times WHERE trail_id = ?
-        ORDER BY time_ms ASC LIMIT ?
+        FROM offroad_trail_times
+        WHERE trail_id = ?
+        ORDER BY time_ms ASC
+        LIMIT ?
     ]], { tonumber(trailId), Config.MaximumLeaderboardEntries })
     cb(rows or {})
 end)
@@ -79,6 +80,7 @@ RegisterNetEvent('offroad:server:requestStart', function(trailId)
     local src = source
     local trail = findTrail(trailId)
     if not trail then notify(src, 'That trail no longer exists.', 'error') return end
+
     local ped = GetPlayerPed(src)
     if ped == 0 or #(GetEntityCoords(ped) - trail.start) > Config.StartDistance then
         notify(src, 'You are too far from the trailhead.', 'error')
@@ -141,6 +143,7 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
 
     local Player = QBCore.Functions.GetPlayer(src)
     if not Player then return end
+
     local playerName = GetPlayerName(src) or 'Unknown'
     local charName = playerName
     if Player.PlayerData.charinfo then
@@ -149,24 +152,53 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
         if charName == '' then charName = playerName end
     end
 
+    -- Capture the exact vehicle being used when the player crosses the finish.
+    local vehicle = GetVehiclePedIsIn(ped, false)
+    if vehicle == 0 or not DoesEntityExist(vehicle) then
+        notify(src, 'You must finish the trail while inside a vehicle.', 'error')
+        return
+    end
+
+    local vehicleModelHash = GetEntityModel(vehicle)
+    local vehicleModel = tostring(vehicleModelHash)
+    local vehicleDisplayName = GetDisplayNameFromVehicleModel(vehicleModelHash)
+    local vehicleLabel = GetLabelText(vehicleDisplayName)
+    if not vehicleLabel or vehicleLabel == 'NULL' then vehicleLabel = vehicleDisplayName end
+    if not vehicleLabel or vehicleLabel == '' or vehicleLabel == 'CARNOTFOUND' then vehicleLabel = 'Unknown Vehicle' end
+    local vehiclePlate = GetVehicleNumberPlateText(vehicle) or ''
+    vehiclePlate = vehiclePlate:gsub('^%s+', ''):gsub('%s+$', '')
+
     local citizenid = Player.PlayerData.citizenid
-    local existing = MySQL.single.await('SELECT id, time_ms FROM offroad_trail_times WHERE trail_id = ? AND citizenid = ? LIMIT 1', { trail.id, citizenid })
+    local existing = MySQL.single.await(
+        'SELECT id, time_ms FROM offroad_trail_times WHERE trail_id = ? AND citizenid = ? LIMIT 1',
+        { trail.id, citizenid }
+    )
+
     if existing then
         if elapsed >= existing.time_ms then
             notify(src, ('Finished in %.3fs. Personal best: %.3fs.'):format(elapsed / 1000, existing.time_ms / 1000), 'primary')
             TriggerClientEvent('offroad:client:runFinished', src, trail.id, elapsed)
             return
         end
-        MySQL.update.await('UPDATE offroad_trail_times SET player_name = ?, time_ms = ?, created_at = NOW() WHERE id = ?', { charName, elapsed, existing.id })
+
+        MySQL.update.await([[
+            UPDATE offroad_trail_times
+            SET player_name = ?, time_ms = ?, vehicle_name = ?, vehicle_model = ?, vehicle_plate = ?, created_at = NOW()
+            WHERE id = ?
+        ]], { charName, elapsed, vehicleLabel, vehicleModel, vehiclePlate, existing.id })
         notify(src, ('NEW PERSONAL BEST: %.3f seconds!'):format(elapsed / 1000), 'success')
     else
-        MySQL.insert.await('INSERT INTO offroad_trail_times (trail_id, citizenid, player_name, time_ms) VALUES (?, ?, ?, ?)', { trail.id, citizenid, charName, elapsed })
+        MySQL.insert.await([[
+            INSERT INTO offroad_trail_times
+                (trail_id, citizenid, player_name, time_ms, vehicle_name, vehicle_model, vehicle_plate)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ]], { trail.id, citizenid, charName, elapsed, vehicleLabel, vehicleModel, vehiclePlate })
         notify(src, ('Trail complete: %.3f seconds!'):format(elapsed / 1000), 'success')
     end
+
     TriggerClientEvent('offroad:client:runFinished', src, trail.id, elapsed)
 end)
 
--- Trail creation is intentionally unrestricted.
 RegisterCommand('createtrailhead', function(source, args)
     if source == 0 then return end
     local name = table.concat(args, ' ')
@@ -195,7 +227,6 @@ RegisterNetEvent('offroad:server:saveTrail', function(data)
         return
     end
 
-    -- Route contains ONLY intermediate required checkpoints. Finish is separate.
     local id = MySQL.insert.await([[
         INSERT INTO offroad_trails
             (name, start_x, start_y, start_z, start_heading,
