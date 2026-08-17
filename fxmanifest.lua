@@ -3,15 +3,16 @@ game 'gta5'
 lua54 'yes'
 
 author 'StormsReaper'
-description 'QBCore Point-to-Point Offroad Trails with Trailhead Peds and Route Recording'
-version '2.0.1'
+description 'QBCore Point-to-Point Offroad Trails with Trailhead Peds, Route Recording, Checkpoints and Leaderboards'
+version '2.1.0'
 
 shared_scripts {
     'config.lua'
 }
 
 client_scripts {
-    'client/main.lua'
+    'client/main.lua',
+    'client/leaderboard.lua'
 }
 
 server_scripts {
