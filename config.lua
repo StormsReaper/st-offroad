@@ -1,5 +1,10 @@
 Config = {}
 
+Config.AdminPermissions = {
+    admin = true,
+    god = true
+}
+
 Config.InteractionDistance = 12.0
 Config.StartDistance = 10.0
 Config.FinishDistance = 12.0
