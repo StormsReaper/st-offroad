@@ -53,7 +53,6 @@ local function createTrailheadScene(trail)
         crowd = {}
     }
 
-    -- Referee with clipboard.
     local refHash = loadModel(Config.Trailhead.pedModel)
 
     if refHash then
@@ -74,17 +73,10 @@ local function createTrailheadScene(trail)
         SetBlockingOfNonTemporaryEvents(scene.ped, true)
         SetEntityInvincible(scene.ped, true)
         FreezeEntityPosition(scene.ped, true)
-        TaskStartScenarioInPlace(
-            scene.ped,
-            Config.Trailhead.clipboardScenario,
-            0,
-            true
-        )
-
+        TaskStartScenarioInPlace(scene.ped, Config.Trailhead.clipboardScenario, 0, true)
         SetModelAsNoLongerNeeded(refHash)
     end
 
-    -- Small group cheering off to the side.
     for i, offset in ipairs(Config.Trailhead.crowdOffsets) do
         local modelName = Config.Trailhead.crowdModels[((i - 1) % #Config.Trailhead.crowdModels) + 1]
         local hash = loadModel(modelName)
@@ -106,13 +98,7 @@ local function createTrailheadScene(trail)
             SetBlockingOfNonTemporaryEvents(ped, true)
             SetEntityInvincible(ped, true)
             FreezeEntityPosition(ped, true)
-
-            TaskStartScenarioInPlace(
-                ped,
-                Config.Trailhead.cheerScenario,
-                0,
-                true
-            )
+            TaskStartScenarioInPlace(ped, Config.Trailhead.cheerScenario, 0, true)
 
             scene.crowd[#scene.crowd + 1] = ped
             SetModelAsNoLongerNeeded(hash)
@@ -184,7 +170,6 @@ end
 
 local function drawText3D(coords, text)
     local onScreen, x, y = World3dToScreen2d(coords.x, coords.y, coords.z)
-
     if not onScreen then return end
 
     SetTextScale(0.32, 0.32)
@@ -211,11 +196,7 @@ local function showLeaderboard(trailId, trailName)
             print('No recorded times yet.')
         else
             for i, row in ipairs(rows) do
-                print(('%02d. %-25s %s'):format(
-                    i,
-                    row.player_name or 'Unknown',
-                    formatTime(row.time_ms)
-                ))
+                print(('%02d. %-25s %s'):format(i, row.player_name or 'Unknown', formatTime(row.time_ms)))
             end
         end
 
@@ -243,7 +224,6 @@ CreateThread(function()
     end)
 end)
 
--- Trail interaction.
 CreateThread(function()
     while true do
         local wait = 1000
@@ -257,21 +237,14 @@ CreateThread(function()
             if startDist < 60.0 then
                 wait = 0
 
-                DrawMarker(
-                    1,
-                    trail.start.x, trail.start.y, trail.start.z - 1.0,
-                    0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0,
-                    3.0, 3.0, 1.0,
-                    0, 255, 0, 100,
-                    false, false, 2, false, nil, nil, false
-                )
+                DrawMarker(1, trail.start.x, trail.start.y, trail.start.z - 1.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    3.0, 3.0, 1.0, 0, 255, 0, 100,
+                    false, false, 2, false, nil, nil, false)
 
                 if startDist <= Config.InteractionDistance and not ActiveRun then
-                    drawText3D(
-                        trail.start + vector3(0.0, 0.0, 1.7),
-                        ('~g~[E]~w~ START ~y~%s~w~\n~c~/trailtimes~w~ for leaderboard'):format(trail.name)
-                    )
+                    drawText3D(trail.start + vector3(0.0, 0.0, 1.7),
+                        ('~g~[E]~w~ START ~y~%s~w~\n~c~/trailtimes~w~ for leaderboard'):format(trail.name))
 
                     if IsControlJustReleased(0, 38) then
                         SetNewWaypoint(trail.finish.x, trail.finish.y)
@@ -283,21 +256,14 @@ CreateThread(function()
             if finishDist < 60.0 then
                 wait = 0
 
-                DrawMarker(
-                    1,
-                    trail.finish.x, trail.finish.y, trail.finish.z - 1.0,
-                    0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0,
-                    3.0, 3.0, 1.0,
-                    255, 50, 50, 100,
-                    false, false, 2, false, nil, nil, false
-                )
+                DrawMarker(1, trail.finish.x, trail.finish.y, trail.finish.z - 1.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    3.0, 3.0, 1.0, 255, 50, 50, 100,
+                    false, false, 2, false, nil, nil, false)
 
                 if finishDist <= Config.InteractionDistance and ActiveRun and ActiveRun.trailId == trail.id then
-                    drawText3D(
-                        trail.finish + vector3(0.0, 0.0, 1.5),
-                        '~r~FINISH~w~\n~g~[E]~w~ Stop the clock'
-                    )
+                    drawText3D(trail.finish + vector3(0.0, 0.0, 1.5),
+                        '~r~FINISH~w~\n~g~[E]~w~ Stop the clock')
 
                     if IsControlJustReleased(0, 38) then
                         TriggerServerEvent('offroad:server:finishRun', trail.id)
@@ -332,10 +298,7 @@ RegisterNetEvent('offroad:client:startRun', function(trailId)
             SetTextColour(255, 255, 255, 230)
 
             BeginTextCommandDisplayText('STRING')
-            AddTextComponentString(('~y~%s~w~ | %s'):format(
-                trail.name,
-                formatTime(elapsed)
-            ))
+            AddTextComponentString(('~y~%s~w~ | %s'):format(trail.name, formatTime(elapsed)))
             EndTextCommandDisplayText(0.5, 0.90)
 
             Wait(0)
@@ -349,7 +312,6 @@ RegisterNetEvent('offroad:client:runFinished', function(trailId)
     end
 
     local trail = getTrail(trailId)
-
     if trail then
         showLeaderboard(trailId, trail.name)
     end
@@ -361,10 +323,7 @@ end)
 
 RegisterNetEvent('offroad:client:beginTrailCreation', function(name)
     if CreatingTrail then
-        QBCore.Functions.Notify(
-            'You are already creating a trail. Use /finishcreatetrail or /cancelcreatetrail.',
-            'error'
-        )
+        QBCore.Functions.Notify('You are already creating a trail. Use /finishcreatetrail or /cancelcreatetrail.', 'error')
         return
     end
 
@@ -384,63 +343,35 @@ RegisterNetEvent('offroad:client:beginTrailCreation', function(name)
         startedAt = GetGameTimer()
     }
 
-    QBCore.Functions.Notify(
-        ('Trailhead created: %s'):format(name),
-        'success',
-        5000
-    )
-
-    QBCore.Functions.Notify(
-        'Drive the route. Press "=" whenever you want to save a waypoint.',
-        'primary',
-        7000
-    )
-
-    QBCore.Functions.Notify(
-        'When you reach the finish, type /finishcreatetrail.',
-        'primary',
-        7000
-    )
+    QBCore.Functions.Notify(('Trailhead created: %s'):format(name), 'success', 5000)
+    QBCore.Functions.Notify(('Drive the route. Press "%s" or type /%s whenever you want to save a waypoint.'):format(Config.WaypointKey, Config.WaypointCommand), 'primary', 7000)
+    QBCore.Functions.Notify('When you reach the finish, type /finishcreatetrail.', 'primary', 7000)
 end)
 
 RegisterNetEvent('offroad:client:addTrailPoint', function()
     if not CreatingTrail then
-        QBCore.Functions.Notify(
-            'You are not currently creating a trail.',
-            'error'
-        )
+        QBCore.Functions.Notify('You are not currently creating a trail.', 'error')
         return
     end
 
-    local ped = PlayerPedId()
-    local coords = GetEntityCoords(ped)
+    local coords = GetEntityCoords(PlayerPedId())
 
-    local point = {
+    CreatingTrail.route[#CreatingTrail.route + 1] = {
         x = coords.x,
         y = coords.y,
         z = coords.z
     }
 
-    CreatingTrail.route[#CreatingTrail.route + 1] = point
-
-    QBCore.Functions.Notify(
-        ('Waypoint #%d saved.'):format(#CreatingTrail.route),
-        'success',
-        1500
-    )
+    QBCore.Functions.Notify(('Waypoint #%d saved.'):format(#CreatingTrail.route), 'success', 1500)
 end)
 
-RegisterNetEvent('offroad:client:finishTrailCreation', function()
+RegisterNetEvent('offroad:client/finishTrailCreation', function()
     if not CreatingTrail then
-        QBCore.Functions.Notify(
-            'You are not currently creating a trail.',
-            'error'
-        )
+        QBCore.Functions.Notify('You are not currently creating a trail.', 'error')
         return
     end
 
-    local ped = PlayerPedId()
-    local coords = GetEntityCoords(ped)
+    local coords = GetEntityCoords(PlayerPedId())
 
     CreatingTrail.finish = {
         x = coords.x,
@@ -448,7 +379,7 @@ RegisterNetEvent('offroad:client:finishTrailCreation', function()
         z = coords.z
     }
 
-    -- Add the finish as the final route point too.
+    -- The finish is always the final route point.
     CreatingTrail.route[#CreatingTrail.route + 1] = {
         x = coords.x,
         y = coords.y,
@@ -460,95 +391,82 @@ RegisterNetEvent('offroad:client:finishTrailCreation', function()
 
     TriggerServerEvent('offroad:server:saveTrail', trailData)
 
-    QBCore.Functions.Notify(
-        ('Trail finished. %d route points saved.'):format(#trailData.route),
-        'success',
-        5000
-    )
+    QBCore.Functions.Notify(('Trail finished. %d route points saved.'):format(#trailData.route), 'success', 5000)
 end)
 
-RegisterNetEvent('offroad:client:cancelTrailCreation', function()
+RegisterNetEvent('offroad:client/cancelTrailCreation', function()
     CreatingTrail = nil
     QBCore.Functions.Notify('Trail creation cancelled.', 'primary')
 end)
 
--- While recording, show the saved route points and a line to the current position.
+-- Client-side commands/keybinds. Server-side events still perform the admin checks.
+RegisterCommand(Config.WaypointCommand, function()
+    TriggerServerEvent('offroad:server:requestAddTrailPoint')
+end, false)
+
+RegisterKeyMapping(Config.WaypointCommand, 'Add waypoint to current offroad trail', 'keyboard', Config.WaypointKey)
+
+RegisterCommand('finishcreatetrail', function()
+    TriggerServerEvent('offroad:server:requestFinishTrailCreation')
+end, false)
+
+RegisterCommand('cancelcreatetrail', function()
+    TriggerServerEvent('offroad:server:requestCancelTrailCreation')
+end, false)
+
 CreateThread(function()
     while true do
         if CreatingTrail then
             Wait(0)
 
-            local ped = PlayerPedId()
-            local current = GetEntityCoords(ped)
+            local current = GetEntityCoords(PlayerPedId())
 
-            -- Start point.
-            DrawMarker(
-                1,
-                CreatingTrail.start.x,
-                CreatingTrail.start.y,
-                CreatingTrail.start.z - 1.0,
-                0.0, 0.0, 0.0,
-                0.0, 0.0, 0.0,
-                2.0, 2.0, 1.0,
-                0, 255, 0, 150,
-                false, false, 2, false, nil, nil, false
-            )
+            DrawMarker(1,
+                CreatingTrail.start.x, CreatingTrail.start.y, CreatingTrail.start.z - 1.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                2.0, 2.0, 1.0, 0, 255, 0, 150,
+                false, false, 2, false, nil, nil, false)
 
-            -- Saved route points.
             for i, point in ipairs(CreatingTrail.route) do
-                DrawMarker(
-                    1,
+                DrawMarker(1,
                     point.x, point.y, point.z - 1.0,
-                    0.0, 0.0, 0.0,
-                    0.0, 0.0, 0.0,
-                    1.0, 1.0, 0.5,
-                    255, 200, 0, 150,
-                    false, false, 2, false, nil, nil, false
-                )
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    1.0, 1.0, 0.5, 255, 200, 0, 150,
+                    false, false, 2, false, nil, nil, false)
 
                 if i > 1 then
                     local previous = CreatingTrail.route[i - 1]
-
-                    DrawLine(
-                        previous.x, previous.y, previous.z + 0.5,
+                    DrawLine(previous.x, previous.y, previous.z + 0.5,
                         point.x, point.y, point.z + 0.5,
-                        255, 200, 0, 180
-                    )
+                        255, 200, 0, 180)
                 end
             end
 
-            -- Live line from the last saved point to the admin.
             local last = CreatingTrail.route[#CreatingTrail.route]
 
             if last then
-                DrawLine(
-                    last.x, last.y, last.z + 0.5,
+                DrawLine(last.x, last.y, last.z + 0.5,
                     current.x, current.y, current.z + 0.5,
-                    0, 200, 255, 180
-                )
+                    0, 200, 255, 180)
             else
-                DrawLine(
-                    CreatingTrail.start.x, CreatingTrail.start.y, CreatingTrail.start.z + 0.5,
+                DrawLine(CreatingTrail.start.x, CreatingTrail.start.y, CreatingTrail.start.z + 0.5,
                     current.x, current.y, current.z + 0.5,
-                    0, 200, 255, 180
-                )
+                    0, 200, 255, 180)
             end
 
-            drawText3D(
-                current + vector3(0.0, 0.0, 1.3),
-                ('~y~RECORDING: %s~w~\nPoints: ~g~%d~w~\nPress ~b~=%s~w~ to add point\n/finishcreatetrail to finish'):format(
+            drawText3D(current + vector3(0.0, 0.0, 1.3),
+                ('~y~RECORDING: %s~w~\nPoints: ~g~%d~w~\nPress ~b~%s~w~ or /%s to add point\n/finishcreatetrail to finish\n/cancelcreatetrail to cancel'):format(
                     CreatingTrail.name,
                     #CreatingTrail.route,
-                    ''
-                )
-            )
+                    Config.WaypointKey,
+                    Config.WaypointCommand
+                ))
         else
             Wait(500)
         end
     end
 end)
 
--- /trailtimes
 RegisterCommand('trailtimes', function()
     if #Trails == 0 then
         QBCore.Functions.Notify('There are no offroad trails configured.', 'error')
@@ -560,7 +478,6 @@ RegisterCommand('trailtimes', function()
 
     for _, trail in ipairs(Trails) do
         local distance = #(coords - trail.start)
-
         if not closestDistance or distance < closestDistance then
             closest = trail
             closestDistance = distance
@@ -572,7 +489,6 @@ RegisterCommand('trailtimes', function()
     end
 end, false)
 
--- Print trail data to F8.
 RegisterCommand('traillist', function()
     for _, trail in ipairs(Trails) do
         print(('[Trail %s] %s | start %.2f %.2f %.2f | finish %.2f %.2f %.2f | route points: %d'):format(
