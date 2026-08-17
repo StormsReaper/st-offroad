@@ -29,7 +29,6 @@ Config.Trailhead = {
         'a_m_y_hipster_01'
     },
 
-    -- Off to the side of the trailhead.
     crowdOffsets = {
         vector3(4.0, 2.0, 0.0),
         vector3(5.0, 1.0, 0.0),
@@ -42,14 +41,19 @@ Config.Trailhead = {
     clipboardScenario = 'WORLD_HUMAN_CLIPBOARD'
 }
 
+-- Map blips. Trailheads are always visible on the player's map/minimap.
 Config.StartBlip = {
-    sprite = 1,
+    sprite = 315,
     color = 2,
-    scale = 0.85
+    scale = 0.90,
+    display = 4,
+    shortRange = false
 }
 
 Config.FinishBlip = {
-    sprite = 1,
+    sprite = 38,
     color = 1,
-    scale = 0.75
+    scale = 0.75,
+    display = 4,
+    shortRange = false
 }
