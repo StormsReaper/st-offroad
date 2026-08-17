@@ -21,11 +21,8 @@ end
 
 local function loadTrails()
     local rows = MySQL.query.await([[
-        SELECT id, name,
-               start_x, start_y, start_z, start_heading,
-               finish_x, finish_y, finish_z,
-               route_json,
-               created_by, created_at
+        SELECT id, name, start_x, start_y, start_z, start_heading,
+               finish_x, finish_y, finish_z, route_json, created_by, created_at
         FROM offroad_trails
         WHERE enabled = 1
         ORDER BY name ASC
@@ -37,9 +34,7 @@ local function loadTrails()
         local route = {}
         if row.route_json and row.route_json ~= '' then
             local decoded = json.decode(row.route_json)
-            if type(decoded) == 'table' then
-                route = decoded
-            end
+            if type(decoded) == 'table' then route = decoded end
         end
 
         Trails[#Trails + 1] = {
@@ -85,10 +80,7 @@ RegisterNetEvent('offroad:server:requestStart', function(trailId)
 
     local trail
     for _, t in ipairs(Trails) do
-        if t.id == trailId then
-            trail = t
-            break
-        end
+        if t.id == trailId then trail = t break end
     end
 
     if not trail then
@@ -105,19 +97,15 @@ RegisterNetEvent('offroad:server:requestStart', function(trailId)
         return
     end
 
-    ActiveRuns[src] = {
-        trailId = trail.id,
-        startedAt = GetGameTimer()
-    }
-
+    ActiveRuns[src] = { trailId = trail.id, startedAt = GetGameTimer() }
     TriggerClientEvent('offroad:client:startRun', src, trail.id)
 end)
 
 RegisterNetEvent('offroad:server:finishRun', function(trailId)
     local src = source
     trailId = tonumber(trailId)
-
     local run = ActiveRuns[src]
+
     if not run or run.trailId ~= trailId then
         notify(src, 'You do not have an active run for this trail.', 'error')
         return
@@ -125,10 +113,7 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
 
     local trail
     for _, t in ipairs(Trails) do
-        if t.id == trailId then
-            trail = t
-            break
-        end
+        if t.id == trailId then trail = t break end
     end
 
     if not trail then
@@ -161,8 +146,7 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
     local charName = playerName
 
     if Player.PlayerData.charinfo then
-        charName = (Player.PlayerData.charinfo.firstname or '') ..
-            ' ' .. (Player.PlayerData.charinfo.lastname or '')
+        charName = (Player.PlayerData.charinfo.firstname or '') .. ' ' .. (Player.PlayerData.charinfo.lastname or '')
         charName = charName:gsub('^%s+', ''):gsub('%s+$', '')
         if charName == '' then charName = playerName end
     end
@@ -170,18 +154,14 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
     local citizenid = Player.PlayerData.citizenid
 
     local existing = MySQL.single.await([[
-        SELECT id, time_ms
-        FROM offroad_trail_times
-        WHERE trail_id = ? AND citizenid = ?
-        LIMIT 1
+        SELECT id, time_ms FROM offroad_trail_times
+        WHERE trail_id = ? AND citizenid = ? LIMIT 1
     ]], { trailId, citizenid })
 
     if existing then
         if elapsed >= existing.time_ms then
-            notify(src, ('Finished in %.3fs. Personal best: %.3fs.'):format(
-                elapsed / 1000,
-                existing.time_ms / 1000
-            ), 'primary')
+            notify(src, ('Finished in %.3fs. Personal best: %.3fs.'):format(elapsed / 1000, existing.time_ms / 1000), 'primary')
+            TriggerClientEvent('offroad:client:runFinished', src, trailId, elapsed)
             return
         end
 
@@ -194,8 +174,7 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
         notify(src, ('NEW PERSONAL BEST: %.3f seconds!'):format(elapsed / 1000), 'success')
     else
         MySQL.insert.await([[
-            INSERT INTO offroad_trail_times
-                (trail_id, citizenid, player_name, time_ms)
+            INSERT INTO offroad_trail_times (trail_id, citizenid, player_name, time_ms)
             VALUES (?, ?, ?, ?)
         ]], { trailId, citizenid, charName, elapsed })
 
@@ -205,17 +184,14 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
     TriggerClientEvent('offroad:client:runFinished', src, trailId, elapsed)
 end)
 
--- Starts a new route recording at the admin's exact current coordinates.
 RegisterCommand('createtrailhead', function(source, args)
     if source == 0 then return end
-
     if not isAdmin(source) then
         notify(source, 'You do not have permission to create trails.', 'error')
         return
     end
 
     local name = table.concat(args, ' ')
-
     if name == '' then
         notify(source, 'Usage: /createtrailhead <trail name>', 'error')
         return
@@ -224,19 +200,33 @@ RegisterCommand('createtrailhead', function(source, args)
     TriggerClientEvent('offroad:client:beginTrailCreation', source, name)
 end, false)
 
--- Saves the admin's current position as another route point.
-RegisterCommand(Config.WaypointCommand, function(source)
-    if source == 0 then return end
-
-    if not isAdmin(source) then
+-- The server owns the admin check; the client never directly decides whether an admin action is allowed.
+RegisterNetEvent('offroad:server:requestAddTrailPoint', function()
+    local src = source
+    if not isAdmin(src) then
+        notify(src, 'You do not have permission to add trail points.', 'error')
         return
     end
+    TriggerClientEvent('offroad:client:addTrailPoint', src)
+end)
 
-    TriggerClientEvent('offroad:client:addTrailPoint', source)
-end, false)
+RegisterNetEvent('offroad:server:requestFinishTrailCreation', function()
+    local src = source
+    if not isAdmin(src) then
+        notify(src, 'You do not have permission to finish trail creation.', 'error')
+        return
+    end
+    TriggerClientEvent('offroad:client/finishTrailCreation', src)
+end)
 
--- Keybind for "=". The player can also type /addtrailpoint.
-RegisterKeyMapping(Config.WaypointCommand, 'Add waypoint to current offroad trail', 'keyboard', Config.WaypointKey)
+RegisterNetEvent('offroad:server:requestCancelTrailCreation', function()
+    local src = source
+    if not isAdmin(src) then
+        notify(src, 'You do not have permission to cancel trail creation.', 'error')
+        return
+    end
+    TriggerClientEvent('offroad:client/cancelTrailCreation', src)
+end)
 
 RegisterNetEvent('offroad:server:saveTrail', function(data)
     local src = source
@@ -246,21 +236,14 @@ RegisterNetEvent('offroad:server:saveTrail', function(data)
         return
     end
 
-    if type(data) ~= 'table' or type(data.name) ~= 'string' then
-        return
-    end
+    if type(data) ~= 'table' or type(data.name) ~= 'string' then return end
 
-    local start = data.start
-    local finish = data.finish
+    local start, finish = data.start, data.finish
     local route = data.route or {}
 
     if type(start) ~= 'table' or type(finish) ~= 'table' then
         notify(src, 'Trail start or finish is invalid.', 'error')
         return
-    end
-
-    if type(route) ~= 'table' then
-        route = {}
     end
 
     local sx, sy, sz = tonumber(start.x), tonumber(start.y), tonumber(start.z)
@@ -272,69 +255,36 @@ RegisterNetEvent('offroad:server:saveTrail', function(data)
         return
     end
 
-    local playerName = GetPlayerName(src) or 'Unknown'
+    if type(route) ~= 'table' then route = {} end
 
+    local playerName = GetPlayerName(src) or 'Unknown'
     local id = MySQL.insert.await([[
         INSERT INTO offroad_trails
             (name, start_x, start_y, start_z, start_heading,
              finish_x, finish_y, finish_z, route_json, created_by)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ]], {
-        data.name,
-        sx, sy, sz, sh,
-        fx, fy, fz,
-        json.encode(route),
-        playerName
+        data.name, sx, sy, sz, sh, fx, fy, fz, json.encode(route), playerName
     })
 
-    notify(src, ('Trail "%s" saved with ID %s. %d route points recorded.'):format(
-        data.name, id, #route
-    ), 'success')
-
+    notify(src, ('Trail "%s" saved with ID %s. %d route points recorded.'):format(data.name, id, #route), 'success')
     loadTrails()
 end)
 
-RegisterCommand('finishcreatetrail', function(source)
-    if source == 0 then return end
-
-    if not isAdmin(source) then
-        notify(source, 'You do not have permission to finish trail creation.', 'error')
-        return
-    end
-
-    TriggerClientEvent('offroad:client:finishTrailCreation', source)
-end, false)
-
-RegisterCommand('cancelcreatetrail', function(source)
-    if source == 0 then return end
-
-    if not isAdmin(source) then
-        notify(source, 'You do not have permission to cancel trail creation.', 'error')
-        return
-    end
-
-    TriggerClientEvent('offroad:client:cancelTrailCreation', source)
-end, false)
-
 RegisterCommand('traildelete', function(source, args)
     if source == 0 then return end
-
     if not isAdmin(source) then
         notify(source, 'You do not have permission to delete trails.', 'error')
         return
     end
 
     local trailId = tonumber(args[1])
-
     if not trailId then
         notify(source, 'Usage: /traildelete <trailId>', 'error')
         return
     end
 
-    local affected = MySQL.update.await(
-        'UPDATE offroad_trails SET enabled = 0 WHERE id = ?',
-        { trailId }
-    )
+    local affected = MySQL.update.await('UPDATE offroad_trails SET enabled = 0 WHERE id = ?', { trailId })
 
     if affected > 0 then
         notify(source, ('Trail %s disabled.'):format(trailId), 'success')
