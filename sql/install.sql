@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS `offroad_trail_times` (
     `citizenid` VARCHAR(50) NOT NULL,
     `player_name` VARCHAR(100) NOT NULL,
     `time_ms` INT NOT NULL,
+    `vehicle_name` VARCHAR(100) DEFAULT NULL,
+    `vehicle_model` VARCHAR(100) DEFAULT NULL,
+    `vehicle_plate` VARCHAR(20) DEFAULT NULL,
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `unique_trail_player` (`trail_id`, `citizenid`),
@@ -30,3 +33,9 @@ CREATE TABLE IF NOT EXISTS `offroad_trail_times` (
         FOREIGN KEY (`trail_id`) REFERENCES `offroad_trails` (`id`)
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- If offroad_trail_times already existed before vehicle tracking was added,
+-- run these statements once instead of recreating the table:
+-- ALTER TABLE `offroad_trail_times` ADD COLUMN `vehicle_name` VARCHAR(100) DEFAULT NULL AFTER `time_ms`;
+-- ALTER TABLE `offroad_trail_times` ADD COLUMN `vehicle_model` VARCHAR(100) DEFAULT NULL AFTER `vehicle_name`;
+-- ALTER TABLE `offroad_trail_times` ADD COLUMN `vehicle_plate` VARCHAR(20) DEFAULT NULL AFTER `vehicle_model`;
