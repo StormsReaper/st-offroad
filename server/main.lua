@@ -7,14 +7,6 @@ local function notify(src, msg, msgType)
     TriggerClientEvent('QBCore:Notify', src, msg, msgType or 'primary')
 end
 
-local function isAdmin(src)
-    if src == 0 then return true end
-    for permission, enabled in pairs(Config.AdminPermissions) do
-        if enabled and QBCore.Functions.HasPermission(src, permission) then return true end
-    end
-    return false
-end
-
 local function loadTrails()
     local rows = MySQL.query.await([[
         SELECT id, name, start_x, start_y, start_z, start_heading,
@@ -152,9 +144,10 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
     TriggerClientEvent('offroad:client:runFinished', src, trailId, elapsed)
 end)
 
+-- Trail creation is intentionally unrestricted. Any connected player can create,
+-- edit through the recording workflow, finish, and save a trail.
 RegisterCommand('createtrailhead', function(source, args)
     if source == 0 then return end
-    if not isAdmin(source) then notify(source, 'You do not have permission to create trails.', 'error') return end
 
     local name = table.concat(args, ' ')
     if name == '' then
@@ -167,25 +160,21 @@ end, false)
 
 RegisterNetEvent('offroad:server:requestAddTrailPoint', function()
     local src = source
-    if not isAdmin(src) then notify(src, 'You do not have permission to add trail points.', 'error') return end
     TriggerClientEvent('offroad:client:addTrailPoint', src)
 end)
 
 RegisterNetEvent('offroad:server:requestFinishTrailCreation', function()
     local src = source
-    if not isAdmin(src) then notify(src, 'You do not have permission to finish trail creation.', 'error') return end
     TriggerClientEvent('offroad:client:finishTrailCreation', src)
 end)
 
 RegisterNetEvent('offroad:server:requestCancelTrailCreation', function()
     local src = source
-    if not isAdmin(src) then notify(src, 'You do not have permission to cancel trail creation.', 'error') return end
     TriggerClientEvent('offroad:client:cancelTrailCreation', src)
 end)
 
 RegisterNetEvent('offroad:server:saveTrail', function(data)
     local src = source
-    if not isAdmin(src) then notify(src, 'You do not have permission to save trails.', 'error') return end
     if type(data) ~= 'table' or type(data.name) ~= 'string' then return end
 
     local start, finish = data.start, data.finish
@@ -217,7 +206,6 @@ end)
 
 RegisterCommand('traildelete', function(source, args)
     if source == 0 then return end
-    if not isAdmin(source) then notify(source, 'You do not have permission to delete trails.', 'error') return end
 
     local trailId = tonumber(args[1])
     if not trailId then notify(source, 'Usage: /traildelete <trailId>', 'error') return end
