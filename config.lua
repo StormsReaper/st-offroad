@@ -13,7 +13,7 @@ Config.MinimumTimeSeconds = 5
 Config.MaximumLeaderboardEntries = 25
 
 -- Route-recording settings
-Config.WaypointKey = '='
+Config.WaypointKey = 'E'
 Config.WaypointCommand = 'addtrailpoint'
 
 -- Trailhead scene
