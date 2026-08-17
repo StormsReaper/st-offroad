@@ -87,13 +87,14 @@ RegisterNetEvent('offroad:server:requestStart', function(trailId)
         return
     end
 
+    local count = checkpointCount(trail)
     ActiveRuns[src] = {
         trailId = trail.id,
         startedAt = GetGameTimer(),
         nextCheckpoint = 1,
-        checkpointCount = checkpointCount(trail)
+        checkpointCount = count
     }
-    TriggerClientEvent('offroad:client:startRun', src, trail.id, ActiveRuns[src].checkpointCount)
+    TriggerClientEvent('offroad:client:startRun', src, trail.id, count)
 end)
 
 RegisterNetEvent('offroad:server:passedCheckpoint', function(trailId, checkpointIndex)
@@ -118,11 +119,15 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
     local src = source
     local run = ActiveRuns[src]
     local trail = findTrail(trailId)
+
     if not run or not trail or run.trailId ~= trail.id then
         notify(src, 'You do not have an active run for this trail.', 'error')
         return
     end
 
+    -- Do not destroy ActiveRuns until EVERY validation succeeds. This prevents
+    -- a failed finish attempt (for example, exiting the vehicle) from killing
+    -- the server-side run while the client timer is still active.
     if run.nextCheckpoint <= run.checkpointCount then
         notify(src, ('You must pass waypoint %d of %d before finishing.'):format(run.nextCheckpoint, run.checkpointCount), 'error')
         return
@@ -134,15 +139,25 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
         return
     end
 
+    -- Capture the vehicle BEFORE clearing the active run. If the player is on
+    -- foot, they can correct it and press E again without losing the timer.
+    local vehicle = GetVehiclePedIsIn(ped, false)
+    if vehicle == 0 or not DoesEntityExist(vehicle) then
+        notify(src, 'You must finish the trail while inside a vehicle.', 'error')
+        return
+    end
+
     local elapsed = GetGameTimer() - run.startedAt
-    ActiveRuns[src] = nil
     if elapsed < Config.MinimumTimeSeconds * 1000 then
         notify(src, 'Run rejected: finish time was too fast to be valid.', 'error')
         return
     end
 
     local Player = QBCore.Functions.GetPlayer(src)
-    if not Player then return end
+    if not Player then
+        notify(src, 'Unable to identify your player data. Your run is still active.', 'error')
+        return
+    end
 
     local playerName = GetPlayerName(src) or 'Unknown'
     local charName = playerName
@@ -150,13 +165,6 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
         charName = (Player.PlayerData.charinfo.firstname or '') .. ' ' .. (Player.PlayerData.charinfo.lastname or '')
         charName = charName:gsub('^%s+', ''):gsub('%s+$', '')
         if charName == '' then charName = playerName end
-    end
-
-    -- Capture the exact vehicle being used when the player crosses the finish.
-    local vehicle = GetVehiclePedIsIn(ped, false)
-    if vehicle == 0 or not DoesEntityExist(vehicle) then
-        notify(src, 'You must finish the trail while inside a vehicle.', 'error')
-        return
     end
 
     local vehicleModelHash = GetEntityModel(vehicle)
@@ -176,23 +184,39 @@ RegisterNetEvent('offroad:server:finishRun', function(trailId)
 
     if existing then
         if elapsed >= existing.time_ms then
+            -- The player completed a valid run, so now it is safe to clear it.
+            ActiveRuns[src] = nil
             notify(src, ('Finished in %.3fs. Personal best: %.3fs.'):format(elapsed / 1000, existing.time_ms / 1000), 'primary')
             TriggerClientEvent('offroad:client:runFinished', src, trail.id, elapsed)
             return
         end
 
-        MySQL.update.await([[
+        local updated = MySQL.update.await([[
             UPDATE offroad_trail_times
             SET player_name = ?, time_ms = ?, vehicle_name = ?, vehicle_model = ?, vehicle_plate = ?, created_at = NOW()
             WHERE id = ?
         ]], { charName, elapsed, vehicleLabel, vehicleModel, vehiclePlate, existing.id })
+
+        if not updated then
+            notify(src, 'Could not save your new personal best. Your run is still active.', 'error')
+            return
+        end
+
+        ActiveRuns[src] = nil
         notify(src, ('NEW PERSONAL BEST: %.3f seconds!'):format(elapsed / 1000), 'success')
     else
-        MySQL.insert.await([[
+        local inserted = MySQL.insert.await([[
             INSERT INTO offroad_trail_times
                 (trail_id, citizenid, player_name, time_ms, vehicle_name, vehicle_model, vehicle_plate)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ]], { trail.id, citizenid, charName, elapsed, vehicleLabel, vehicleModel, vehiclePlate })
+
+        if not inserted then
+            notify(src, 'Could not save your trail time. Your run is still active.', 'error')
+            return
+        end
+
+        ActiveRuns[src] = nil
         notify(src, ('Trail complete: %.3f seconds!'):format(elapsed / 1000), 'success')
     end
 
@@ -208,35 +232,6 @@ RegisterCommand('createtrailhead', function(source, args)
     end
     TriggerClientEvent('offroad:client:beginTrailCreation', source, name)
 end, false)
-
-RegisterNetEvent('offroad:server:saveTrail', function(data)
-    local src = source
-    if type(data) ~= 'table' or type(data.name) ~= 'string' then return end
-    local start, finish = data.start, data.finish
-    local route = data.route or {}
-    if type(start) ~= 'table' or type(finish) ~= 'table' or type(route) ~= 'table' then
-        notify(src, 'Invalid trail data.', 'error')
-        return
-    end
-
-    local sx, sy, sz = tonumber(start.x), tonumber(start.y), tonumber(start.z)
-    local sh = tonumber(start.heading) or 0.0
-    local fx, fy, fz = tonumber(finish.x), tonumber(finish.y), tonumber(finish.z)
-    if not sx or not sy or not sz or not fx or not fy or not fz then
-        notify(src, 'Invalid trail coordinates.', 'error')
-        return
-    end
-
-    local id = MySQL.insert.await([[
-        INSERT INTO offroad_trails
-            (name, start_x, start_y, start_z, start_heading,
-             finish_x, finish_y, finish_z, route_json, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ]], { data.name, sx, sy, sz, sh, fx, fy, fz, json.encode(route), GetPlayerName(src) or 'Unknown' })
-
-    notify(src, ('Trail "%s" saved with ID %s. %d required waypoints recorded.'):format(data.name, id, #route), 'success')
-    loadTrails()
-end)
 
 RegisterCommand('traildelete', function(source, args)
     if source == 0 then return end
