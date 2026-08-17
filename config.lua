@@ -8,6 +8,7 @@ Config.AdminPermissions = {
 Config.InteractionDistance = 12.0
 Config.StartDistance = 10.0
 Config.FinishDistance = 12.0
+Config.WaypointPassDistance = 12.0
 Config.MinimumTimeSeconds = 5
 Config.MaximumLeaderboardEntries = 25
 
@@ -19,6 +20,8 @@ Config.WaypointCommand = 'addtrailpoint'
 Config.Trailhead = {
     pedModel = 's_m_y_prismuscl_01',
     pedHeadingOffset = 180.0,
+    groundSearchHeight = 100.0,
+    groundSearchStep = 5.0,
 
     crowdModels = {
         'a_f_y_beach_01',
